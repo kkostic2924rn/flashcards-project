@@ -1,90 +1,51 @@
-from PIL import Image, ImageDraw, ImageFont
-import subprocess
-import RPi.GPIO as GPIO
-import time
+import os
+import pygame
 
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(13, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-GPIO.setup(16, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-GPIO.setup(26, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+# Proveravamo da li postoji fajl /etc/rpi-issue (to znači da smo na RPi-ju)
+is_pi = os.path.exists('/etc/rpi-issue')
 
-WIDTH = 480
-HEIGHT = 320
-FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-FB_DEVICE = "/dev/fb0"
+if is_pi:
+    # Ako smo na RPi-ju, kažemo Pygame-u da crta direktno na SPI ekran preko framebuffer-a
+    os.environ["SDL_FBDEV"] = "/dev/fb0"
+    os.environ["SDL_MOUSEDEV"] = "/dev/input/event0"
+    os.environ["SDL_MOUSEDRV"] = "TSLIB"
 
-def show_screen(lines):
-    img = Image.new("RGB", (WIDTH, HEIGHT), color=(0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    font = ImageFont.truetype(FONT_PATH, 30)
-    x = 20
-    y = 20
-    for line in lines:
-        draw.text((x, y), line, font=font, fill=(255,255,255))
-        y+= 40
-    img.save("/home/pi/screen.png")
-    subprocess.run(["fbi", "-T", "1", "-d", "/dev/fb0", "-noverbose", "-a", "/home/pi/screen.png"])
+pygame.init()
 
-def wait_for_button():
-    while True:
-        if GPIO.input(13) == GPIO.LOW:
-            time.sleep(0.3)
-            return 3
-        if GPIO.input(16) == GPIO.LOW:
-            time.sleep(0.3)
-            return 2
-        if GPIO.input(26) == GPIO.LOW:
-            time.sleep(0.3)
-            return 1
-        
+WIDTH = 320
+HEIGHT = 480
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
-def show_front(word):
-    img = Image.new("RGB", (WIDTH, HEIGHT), color=(0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    font = ImageFont.truetype(FONT_PATH, 30)
+if is_pi:
+    pygame.mouse.set_visible(False)
+else:
+    pygame.mouse.set_visible(True)
 
-    x = WIDTH // 2 - (len(word) * 30 // 4)
-    y = HEIGHT // 2 - 30
-    draw.text((x, y), word, font=font, fill=(255, 255, 255))
-    img.save("/home/pi/screen.png")
-    subprocess.run(["fbi", "-T", "1", "-d", "/dev/fb0", "-noverbose", "-a", "/home/pi/screen.png"])
+ljub1 = (17, 8, 24)       
+ljub2 = (48, 22, 49)      
+roz1 = (99, 55, 102)      
+roz2 = (194, 101, 169)    
 
-def show_back(translation):
-    img = Image.new("RGB", (WIDTH, HEIGHT), color=(0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    font = ImageFont.truetype(FONT_PATH, 30)
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+RED = (200, 0, 0)
+GRAY = (50, 50, 50)
 
-    x = WIDTH // 2 - (len(translation) * 30 // 4)
-    y = HEIGHT // 2 - 30
-    draw.text((x, y), translation, font=font, fill=(255, 255, 255))
-    img.save("/home/pi/screen.png")
-    subprocess.run(["fbi", "-T", "1", "-d", "/dev/fb0", "-noverbose", "-a", "/home/pi/screen.png"])
+font_large = pygame.font.SysFont("dejavusans", 40)
+font_medium = pygame.font.SysFont("dejavusans", 30)
+font_small = pygame.font.SysFont("dejavusans", 20)
 
-def show_menu_select(options, selected):
-    img = Image.new("RGB", (WIDTH, HEIGHT), color=(0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    font = ImageFont.truetype(FONT_PATH, 30)
-    y = 20
-    for i, option in enumerate(options):
-        if i == selected:
-            draw.rectangle([(0, y), (WIDTH, y+35)], fill=(255, 255, 255))
-            draw.text((20, y), option, font=font, fill=(0, 0, 0))
-        else:
-            draw.text((20, y), option, font=font, fill=(255, 255, 255))
-        y += 50
-    img.save("/home/pi/screen.png")
-    subprocess.run(["fbi", "-T", "1", "-d", "/dev/fb0", "-noverbose", "-a", "/home/pi/screen.png"])
+def draw_text_centered(text, font, color, y):
+    """Crta tekst centrirano po X osi na zadatoj Y koordinati."""
+    text_surface = font.render(text, True, color)
+    text_rect = text_surface.get_rect(center=(WIDTH // 2, y))
+    screen.blit(text_surface, text_rect)
 
-def navigate_menu(options):
-    selected = 0
-    show_menu_select(options, selected)
-    while True:
-        button = wait_for_button()
-        if button == 1: 
-            selected = (selected - 1) % len(options)
-            show_menu_select(options, selected)
-        if button == 2: 
-            selected = (selected + 1) % len(options)
-            show_menu_select(options, selected)
-        if button == 3:  
-            return selected
+def draw_button(rect, text, color):
+    """Crta dugme (pravougaonik) i centriran tekst unutar njega."""
+    pygame.draw.rect(screen, color, rect)
+    
+    # Tekst unutar dugmeta je uvek beli
+    text_surface = font_small.render(text, True, WHITE)
+    text_rect = text_surface.get_rect(center=rect.center)
+    screen.blit(text_surface, text_rect)
